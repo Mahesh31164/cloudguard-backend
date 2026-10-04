@@ -18,8 +18,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http)
-            throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http) throws Exception {
 
         http
             .cors(Customizer.withDefaults())
@@ -44,7 +44,9 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowedOrigins(List.of(
-            "https://cloudguard-cnghfdpn-sathi-brahmananda-reddys-projects.vercel.app"
+            "https://cloudguard-cnghfdpn-sathi-brahmananda-reddys-projects.vercel.app",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"
         ));
 
         config.setAllowedMethods(List.of(

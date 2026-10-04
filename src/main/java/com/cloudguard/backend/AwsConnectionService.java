@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
@@ -30,8 +30,8 @@ public class AwsConnectionService implements AutoCloseable {
     private static final Pattern ROLE_ARN = Pattern.compile(
             "^arn:aws:iam::(\\d{12}):role\\/.+$");
 
-    private final ProfileCredentialsProvider sourceCredentials =
-            ProfileCredentialsProvider.create("cloudguard");
+    private final DefaultCredentialsProvider sourceCredentials =
+        DefaultCredentialsProvider.create();
 
     private StsAssumeRoleCredentialsProvider assumedCredentials;
     private String connectedAccountId;
@@ -105,8 +105,10 @@ public class AwsConnectionService implements AutoCloseable {
             throw exception;
         } catch (Exception exception) {
             throw new IllegalArgumentException(
-                    "Could not assume the IAM role. Check the role ARN, external ID, trust policy, and permissions of your local 'cloudguard' AWS profile.",
-                    exception);
+                "Could not assume the IAM role. Check AWS credentials, " +
+                "role ARN, external ID, trust policy, and sts:AssumeRole permissions.",
+                exception
+            );
         } finally {
             if (candidate != null) {
                 candidate.close();
@@ -129,7 +131,13 @@ public class AwsConnectionService implements AutoCloseable {
     }
 
     public synchronized AwsCredentialsProvider getCredentialsProvider() {
-        return assumedCredentials != null ? assumedCredentials : sourceCredentials;
+        if (assumedCredentials == null) {
+            throw new IllegalStateException(
+                "No AWS account is connected. Connect an AWS account first."
+            );
+        }
+
+        return assumedCredentials;
     }
 
     public synchronized void disconnect() {
