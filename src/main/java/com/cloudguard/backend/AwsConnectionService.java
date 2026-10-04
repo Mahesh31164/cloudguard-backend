@@ -7,7 +7,9 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
@@ -18,7 +20,8 @@ import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
  * Local-development AWS connection manager.
  *
  * The backend assumes a customer-provided IAM role using the local
- * "cloudguard" AWS profile as its source identity. Only temporary STS
+ * "cloudguard" profile, or the standard environment/container credentials,
+ * as its source identity. Only temporary STS
  * credentials are retained. The active connection is process-wide and is
  * intended for local single-user testing; add authenticated per-user storage
  * before exposing the application to multiple users or the public internet.
@@ -30,8 +33,14 @@ public class AwsConnectionService implements AutoCloseable {
     private static final Pattern ROLE_ARN = Pattern.compile(
             "^arn:aws:iam::(\\d{12}):role\\/.+$");
 
-    private final DefaultCredentialsProvider sourceCredentials =
-        DefaultCredentialsProvider.create();
+    private final ProfileCredentialsProvider profileCredentials =
+        ProfileCredentialsProvider.builder()
+                .profileName("cloudguard")
+                .build();
+    private final DefaultCredentialsProvider defaultCredentials =
+        DefaultCredentialsProvider.builder().build();
+    private final AwsCredentialsProvider sourceCredentials =
+        AwsCredentialsProviderChain.of(profileCredentials, defaultCredentials);
 
     private StsAssumeRoleCredentialsProvider assumedCredentials;
     private String connectedAccountId;
@@ -125,7 +134,7 @@ public class AwsConnectionService implements AutoCloseable {
         status.put("roleArn", connectedRoleArn);
         status.put("mode", assumedCredentials == null ? "local-profile" : "assumed-role");
         status.put("message", assumedCredentials == null
-                ? "Using the local AWS profile 'cloudguard'."
+                ? "Using the local AWS profile or configured AWS credentials."
                 : "Connected to AWS account " + connectedAccountId + " using temporary role credentials.");
         return status;
     }
@@ -152,6 +161,7 @@ public class AwsConnectionService implements AutoCloseable {
     @Override
     public synchronized void close() {
         disconnect();
-        sourceCredentials.close();
+        profileCredentials.close();
+        defaultCredentials.close();
     }
 }
